@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kinsenas</title>
+<meta name="description" content="Kinsenas payroll. Sign in with the username your company gave you.">
+<meta name="theme-color" content="#0F2440">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Kinsenas">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='4' width='56' height='56' rx='12' fill='%23F4F7FA'/%3E%3Cpath d='M22 16v32M44 16L24 33l20 15' stroke='%230F2440' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+</head>
+<body style="margin:0;font:15px system-ui,sans-serif;color:#132033;background:#EBF0F5">
+<p id="tl" style="padding:24px;margin:0">Opening Kinsenas…</p>
+<noscript><p style="padding:0 24px">Kinsenas needs JavaScript. Please turn it on and reload.</p></noscript>
+<script>
+/* Kinsenas's own page. Loads Kinsenas from its Google Apps Script web app without the browser's Google sign-in, so it opens the same
+   whatever Google accounts the browser has. Only this loader lives here: the code and the data stay in Apps Script and Google Sheets.
+   Employees: add #portal to this page's address.
+   v0.12.3: the app itself (no sign-in, no data) is kept in this browser and shown at once. A quiet check asks which version is live and
+   fetches the new page after an update. A copy older than 3 days is not used. If the browser cannot keep it, the page opens the slow way. */
+window.__KINSENAS_EXEC = "https://script.google.com/macros/s/AKfycby_WKYf4gJfQhsy-BNhPwySga00lV2zmT2G3jL-ZKVGJ6JUJcNCDNexH566ABBUKQtEPQ/exec";
+(function () {
+  var EXEC = window.__KINSENAS_EXEC, KH = "kin_page_html", KA = "kin_page_at", KV = "kin_page_ver", MAX_AGE = 3 * 24 * 3600 * 1000;
+  function get(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }
+  function put(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+  function drop() { try { localStorage.removeItem(KH); localStorage.removeItem(KA); localStorage.removeItem(KV); } catch (e) { /* nothing to drop */ } }
+  function call(fn) {
+    return fetch(EXEC, { method: "POST", credentials: "omit", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ fn: fn, args: [] }) })
+      .then(function (r) { return r.json(); });
+  }
+  function show(html, cached) {
+    window.__KIN_CACHED = !!cached;
+    document.open(); document.write(html + "<script>window.__kinCheck&&window.__kinCheck()<\/script>"); document.close();
+  }
+  /* run from the page just shown: if Kinsenas was updated since the copy was saved, drop it and load the new page */
+  window.__kinCheck = function () {
+    if (!window.__KIN_CACHED) return;
+    call("apiAppVersion").then(function (o) {
+      if (!o || !o.ok || !o.v || !o.v.data) return;   // an older Kinsenas without the question: the 3-day limit covers it
+      var live = o.v.data.version + "|" + o.v.data.build;
+      if (get(KV) !== live) { drop(); location.reload(); }
+    }).catch(function () { /* offline: keep what is shown */ });
+  };
+  function fresh(n) {
+    Promise.all([call("apiAuthPage"), call("apiAppVersion").catch(function () { return null; })])
+      .then(function (a) {
+        var o = a[0], v = a[1];
+        if (!o || !o.ok || !o.v) throw new Error((o && o.e) || "no page");
+        drop();
+        if (v && v.ok && v.v && v.v.data && o.v.length < 3000000) { if (put(KH, o.v)) { put(KA, String(Date.now())); put(KV, v.v.data.version + "|" + v.v.data.build); } else drop(); }
+        show(o.v, false);
+      })
+      .catch(function () { if (n < 2) return setTimeout(function () { fresh(n + 1); }, 1500 * (n + 1)); document.getElementById("tl").innerHTML = "Kinsenas could not open right now. Check the connection and <a href=\"javascript:location.reload()\">try again</a>."; });
+  }
+  var html = get(KH), at = Number(get(KA)) || 0;
+  if (html && get(KV) && Date.now() - at < MAX_AGE && Date.now() - at >= 0) show(html, true); else fresh(0);
+})();
+</script>
+</body>
+</html>
